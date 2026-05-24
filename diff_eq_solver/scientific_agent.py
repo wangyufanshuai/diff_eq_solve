@@ -86,6 +86,12 @@ class ScientificAgent:
     _LAGRANGIAN_TERMS = ("euler-lagrange", "euler lagrange", "lagrangian", "拉格朗日")
     _GR_TERMS = ("schwarzschild", "relativity", "precession", "mercury", "gr", "水星", "进动", "广义相对论")
 
+    _PDE_TERMS = (
+        "pde", "partial differential", "偏微分", "热方程", "波方程", "对流方程",
+        "对流扩散", "burgers", "伯格斯", "schrodinger", "薛定谔",
+        "poisson", "泊松", "laplace", "拉普拉斯", "helmholtz", "亥姆霍兹",
+    )
+
     def __init__(self, max_literature_results: int = 3) -> None:
         self.max_literature_results = max_literature_results
 
@@ -216,6 +222,8 @@ class ScientificAgent:
 
     @staticmethod
     def _looks_like_pde_question(text: str) -> bool:
+        if any(term.lower() in text for term in ScientificAgent._PDE_TERMS):
+            return True
         if "pde:" in text or "偏微分" in text or "partial differential" in text:
             return True
         if any(token in text for token in ("u_t", "u_tt", "u_x", "u_xx", "u_yy", "u_xy")):
@@ -598,7 +606,19 @@ class ScientificAgent:
         result.solver_report.update(solution.info or {})
         result.error_analysis.update({
             key: value for key, value in (solution.info or {}).items()
-            if key in {"success", "solver", "scheme", "grid_shape", "cfl_dt_over_dx", "max_abs_solution"}
+            if key in {
+                "success",
+                "solver",
+                "scheme",
+                "grid",
+                "grid_shape",
+                "stability",
+                "error_norms",
+                "condition_status",
+                "cfl_dt_over_dx",
+                "max_abs_solution",
+                "mass_error",
+            }
         })
         for note in classification.notes:
             result.warnings.append(note)
