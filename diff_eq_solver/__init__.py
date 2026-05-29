@@ -22,6 +22,11 @@ from .lagrangian import (
 )
 from .scientific_agent import ScientificAgent, AgentResult, agent_solve
 from .pde_solver import ParsedPDE, PDEClassification, parse_pde_text, classify_pde, solve_generic_pde
+from .textbook_coverage import (
+    get_textbook_coverage_matrix,
+    solve_quantum_eigenproblem_1d,
+    solve_sturm_liouville,
+)
 from .agent_notebook import (
     create_scientific_agent_panel,
     render_agent_result,
@@ -62,6 +67,7 @@ __all__ = [
     'metric_schwarzschild', 'metric_frw', 'metric_minkowski',
     'ScientificAgent', 'AgentResult', 'agent_solve',
     'ParsedPDE', 'PDEClassification', 'parse_pde_text', 'classify_pde', 'solve_generic_pde',
+    'get_textbook_coverage_matrix', 'solve_quantum_eigenproblem_1d', 'solve_sturm_liouville',
     'create_scientific_agent_panel', 'render_agent_result', 'render_result',
     'get_equation_catalog', 'get_catalog_entry', 'list_catalog_categories',
     'create_scientific_agent_web_app', 'run_scientific_agent_web',

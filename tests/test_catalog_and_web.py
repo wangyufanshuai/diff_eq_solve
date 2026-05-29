@@ -44,12 +44,15 @@ class CatalogAndWebTests(unittest.TestCase):
         self.assertEqual(app["framework"], "streamlit")
         self.assertEqual(app["title"], "\u79d1\u5b66\u8ba1\u7b97\u667a\u80fd\u4f53")
         self.assertGreaterEqual(app["catalog_size"], 65)
+        self.assertGreaterEqual(app["coverage_size"], 40)
+        self.assertIn("热方程", app["examples"])
         self.assertIn("\u56fe\u50cf", app["tabs"])
 
     def test_public_web_and_catalog_exports(self):
         self.assertTrue(callable(ds.create_scientific_agent_web_app))
         self.assertTrue(callable(ds.run_scientific_agent_web))
         self.assertTrue(callable(ds.get_equation_catalog))
+        self.assertTrue(callable(ds.get_textbook_coverage_matrix))
 
     def test_catalog_has_chinese_display_fields_for_every_entry(self):
         for entry in get_equation_catalog(locale="zh"):

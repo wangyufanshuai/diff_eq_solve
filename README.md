@@ -165,3 +165,41 @@ notebooks/              # 示例 Notebook
 ## 许可证
 
 见仓库中的 `LICENSE` 文件。
+
+## 教材核心覆盖范围
+
+项目按“数学物理教材核心题型”推进覆盖，而不是承诺任意方程闭式可解。当前重点支持：
+
+- ODE：振子、摆、Kepler 轨道、刚体 Euler 方程。
+- 特殊函数：Bessel、Legendre、Hermite、Laguerre、Airy 等。
+- Sturm-Liouville / BVP：标准 Dirichlet 弦本征谱。
+- 经典 PDE：热方程、波方程、Laplace、Poisson、Helmholtz、对流扩散。
+- 量子力学：无限深势阱、谐振子、有限势阱、一般一维定态 Schrodinger 网格本征问题。
+- 电磁与流体：一维 Maxwell 波、电报方程、Burgers、Navier-Stokes 1D、Euler 1D、浅水方程模板。
+- Lagrangian/Noether：Euler-Lagrange 方程和 Noether 守恒流模板。
+
+明确不承诺：
+
+- 任意复杂 PDE 都存在闭式解析解。
+- 任意复杂几何区域、三维湍流 DNS、复杂多物理耦合都可直接求解。
+- 缺少初值、边界条件或参数时给出唯一精确结论。
+
+可用下面 API 查看覆盖矩阵：
+
+```python
+from diff_eq_solver import get_textbook_coverage_matrix
+
+matrix = get_textbook_coverage_matrix(locale="zh")
+print(len(matrix))
+```
+
+本征值问题示例：
+
+```python
+from diff_eq_solver import solve_sturm_liouville, solve_quantum_eigenproblem_1d
+
+sl = solve_sturm_liouville(L=1.0, n_modes=4)
+qm = solve_quantum_eigenproblem_1d(potential="0", x_range=(0, 1), n_states=4)
+print(sl.info["eigenvalues"])
+print(qm.info["eigenvalues"])
+```

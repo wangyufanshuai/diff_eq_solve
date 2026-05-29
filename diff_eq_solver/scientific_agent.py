@@ -29,6 +29,7 @@ from .lagrangian import (
 )
 from .numerical_solver import solve_ode_ivp
 from .pde_solver import classify_pde, parse_pde_text, solve_generic_pde
+from .textbook_coverage import solve_quantum_eigenproblem_1d, solve_sturm_liouville
 from .visualizer import (
     plot_3d_surface,
     plot_ode_solution,
@@ -113,6 +114,13 @@ class ScientificAgent:
         if str(params.get("equation_type", "")).lower() == "pde":
             intent["route"] = "generic_pde"
             intent["confidence"] = max(float(intent.get("confidence", 0.0)), 0.9)
+        problem_type = str(params.get("problem_type", "")).lower()
+        if problem_type in {"eigenvalue", "bvp"}:
+            intent["route"] = "eigenvalue_bvp"
+            intent["confidence"] = max(float(intent.get("confidence", 0.0)), 0.9)
+        elif problem_type == "pde_system":
+            intent["route"] = "pde_system"
+            intent["confidence"] = max(float(intent.get("confidence", 0.0)), 0.9)
         result = AgentResult(
             intent=intent,
             input_text=question,
@@ -143,6 +151,10 @@ class ScientificAgent:
             self._run_generic_ode(result, params)
         elif route == "generic_pde":
             self._run_generic_pde(result, params)
+        elif route == "eigenvalue_bvp":
+            self._run_eigenvalue_bvp(result, params)
+        elif route == "pde_system":
+            self._run_pde_system(result, params)
         else:
             self._run_general_help(result)
 
@@ -637,6 +649,139 @@ class ScientificAgent:
             f"符号解: {solution.symbolic if solution.symbolic is not None else '未找到闭式解析解'}"
         )
         result.code = self._generic_pde_code(equation_text, params)
+
+    def _run_eigenvalue_bvp(self, result: AgentResult, params: dict[str, Any]) -> None:
+        question = result.input_text.lower()
+        wants_quantum = (
+            str(params.get("eigen_solver", "")).lower() == "quantum"
+            or "schrodinger" in question
+            or "薛定谔" in result.input_text
+            or "potential" in params
+        )
+        if wants_quantum:
+            solution = solve_quantum_eigenproblem_1d(
+                potential=params.get("potential", "0"),
+                x_range=tuple(params.get("x_range", (0.0, 1.0))),
+                n_states=int(params.get("n_states", params.get("n_modes", 4))),
+                n_grid=int(params.get("n_grid", 300)),
+                hbar=float(params.get("hbar", 1.0)),
+                mass=float(params.get("mass", 1.0)),
+            )
+            label = "一维定态 Schrödinger 本征值问题"
+            result.intent["equation_name"] = "quantum_eigenproblem_1d"
+        else:
+            solution = solve_sturm_liouville(
+                L=float(params.get("L", 1.0)),
+                n_modes=int(params.get("n_modes", 4)),
+                boundary=str(params.get("boundary", "dirichlet")),
+                n_grid=int(params.get("n_grid", 200)),
+            )
+            label = "标准 Sturm-Liouville Dirichlet 本征值问题"
+            result.intent["equation_name"] = "sturm_liouville_dirichlet"
+
+        result.steps.extend([
+            f"选择教材本征值/BVP 模板：{label}。",
+            "求解本征值、本征函数，并计算归一化误差和边界残差。",
+        ])
+        result.data["solution"] = solution
+        result.data["numerical"] = solution
+        if solution.symbolic is not None:
+            result.data["symbolic"] = solution.symbolic
+        result.solver_report.update(solution.info or {})
+        result.error_analysis.update({
+            "eigenvalues": (solution.info or {}).get("eigenvalues", []),
+            "normalization_error": (solution.info or {}).get("normalization_error", []),
+            "boundary_residual": (solution.info or {}).get("boundary_residual"),
+        })
+        fig = self._figure_for_solution("eigenvalue_bvp", solution, params.get("plot_mode"))
+        if fig is not None:
+            result.figures.append(fig)
+        result.derivation = (
+            f"问题类型: {label}\n"
+            f"方法: {(solution.info or {}).get('method')}\n"
+            f"本征值: {(solution.info or {}).get('eigenvalues')}\n"
+            f"归一化误差: {(solution.info or {}).get('normalization_error')}\n"
+            f"边界残差: {(solution.info or {}).get('boundary_residual')}"
+        )
+        result.code = (
+            "from diff_eq_solver import ScientificAgent\n\n"
+            f"result = ScientificAgent().run({result.input_text!r}, params={params!r})\n"
+            "print(result.solver_report)\n"
+        )
+
+    def _run_pde_system(self, result: AgentResult, params: dict[str, Any]) -> None:
+        system_name = str(params.get("system_name") or params.get("template_name") or result.input_text).lower()
+        template = self._pde_system_template(system_name)
+        result.intent["equation_name"] = template
+        self._run_registered_equation(result, template, params, plot_kind=params.get("plot_mode"), mode="numeric")
+        solution = result.data.get("numerical")
+        if isinstance(solution, Solution):
+            diagnostics = self._pde_system_diagnostics(template, solution)
+            result.solver_report.update(diagnostics)
+            result.error_analysis.update(diagnostics)
+            if diagnostics.get("conservation", {}).get("finite") is False:
+                result.warnings.append("PDE 系统数值结果包含 NaN/Inf；需要减小时间步或调整初值。")
+            if not result.figures:
+                fig_solution = self._pde_system_figure_solution(solution)
+                if fig_solution is not None:
+                    fig = self._figure_for_solution("pde_system", fig_solution, params.get("plot_mode"))
+                    if fig is not None:
+                        result.figures.append(fig)
+        result.steps.append("统一 PDE 系统模板报告：守恒量、稳定性和残差指标按可用数据汇总。")
+
+    @staticmethod
+    def _pde_system_template(text: str) -> str:
+        if "maxwell" in text or "electromagnetic" in text or "电磁" in text:
+            return "1D Electromagnetic Wave Equation"
+        if "shallow" in text or "浅水" in text:
+            return "shallow_water_equations"
+        if "navier" in text or "stokes" in text:
+            return "navier_stokes_1d"
+        if "euler" in text:
+            return "euler_equations_1d"
+        return "shallow_water_equations"
+
+    @staticmethod
+    def _pde_system_diagnostics(template: str, solution: Solution) -> dict[str, Any]:
+        info = solution.info or {}
+        diagnostics: dict[str, Any] = {
+            "problem_type": "pde_system",
+            "system_template": template,
+            "condition_status": "ok" if info.get("success", True) else "solver_failed",
+            "stability": {
+                "method": info.get("method") or info.get("solver"),
+                "note": "PDE 系统模板使用已有离散格式；长时间演化仍需检查 CFL/守恒量。",
+            },
+        }
+        numerical = solution.numerical
+        try:
+            if isinstance(numerical, tuple) and len(numerical) >= 2:
+                values = np.asarray(numerical[-1], dtype=float)
+                diagnostics["conservation"] = {
+                    "max_abs": float(np.nanmax(np.abs(values))),
+                    "finite": bool(np.all(np.isfinite(values))),
+                }
+        except Exception:
+            pass
+        return diagnostics
+
+    @staticmethod
+    def _pde_system_figure_solution(solution: Solution) -> Solution | None:
+        numerical = solution.numerical
+        if not isinstance(numerical, tuple):
+            return None
+        try:
+            if len(numerical) >= 4:
+                a, b, first_field, _second_field = numerical[:4]
+                a_arr = np.asarray(a)
+                b_arr = np.asarray(b)
+                field = np.asarray(first_field)
+                if field.ndim == 2 and a_arr.size == field.shape[0] and b_arr.size == field.shape[1]:
+                    return Solution(numerical=(b_arr, a_arr, field), info=solution.info)
+                return Solution(numerical=(a_arr, b_arr, field), info=solution.info)
+        except Exception:
+            return None
+        return None
 
     def _parse_ode_equation(self, text: str, func: sp.Function, var: sp.Symbol) -> sp.Eq:
         cleaned = text.strip()
