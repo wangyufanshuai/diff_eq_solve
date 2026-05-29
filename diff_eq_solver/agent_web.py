@@ -16,6 +16,7 @@ try:
     from .equation_catalog import get_equation_catalog
     from .localization import TABS_ZH, ZH, localize_message, localize_plot_names
     from .scientific_agent import AgentResult, ScientificAgent
+    from .textbook_coverage import get_textbook_coverage_matrix
 except ImportError:  # pragma: no cover - used when Streamlit runs this file as a script.
     from pathlib import Path
     import sys
@@ -27,6 +28,7 @@ except ImportError:  # pragma: no cover - used when Streamlit runs this file as 
     from diff_eq_solver.equation_catalog import get_equation_catalog
     from diff_eq_solver.localization import TABS_ZH, ZH, localize_message, localize_plot_names
     from diff_eq_solver.scientific_agent import AgentResult, ScientificAgent
+    from diff_eq_solver.textbook_coverage import get_textbook_coverage_matrix
 
 
 def create_scientific_agent_web_app() -> dict[str, Any]:
@@ -36,6 +38,8 @@ def create_scientific_agent_web_app() -> dict[str, Any]:
         "framework": "streamlit",
         "tabs": list(TABS_ZH),
         "catalog_size": len(get_equation_catalog(locale="zh")),
+        "coverage_size": len(get_textbook_coverage_matrix(locale="zh")),
+        "examples": list(_TEXTBOOK_EXAMPLES),
     }
 
 
@@ -92,6 +96,7 @@ def run_app() -> None:
         default_question = f"\u6c42\u89e3 {selected_entry['display_name']}\uff1a{selected_entry['display_description']}"
 
     question = st.text_area(ZH["question"], value=default_question, height=100)
+    example_label = st.selectbox("教材案例", ["不使用预设", *list(_TEXTBOOK_EXAMPLES)])
     equation = st.text_input(ZH["equation_optional"], value="", placeholder=ZH["equation_placeholder"])
     with st.expander("自由 PDE 输入（可选）", expanded=False):
         pde_equation = st.text_input(
@@ -137,6 +142,10 @@ def run_app() -> None:
 
     try:
         params = json.loads(params_text.strip() or "{}")
+        if example_label != "不使用预设":
+            example = _TEXTBOOK_EXAMPLES[example_label]
+            question = example["question"]
+            params.update(example["params"])
         if selected_name:
             params["template_name"] = selected_name
         if equation.strip():
@@ -236,6 +245,48 @@ def render_streamlit_result(result: AgentResult) -> None:
 
 def _template_label(entry: dict[str, Any]) -> str:
     return f"{entry['display_name']} ({entry['name']})"
+
+
+_TEXTBOOK_EXAMPLES: dict[str, dict[str, Any]] = {
+    "热方程": {
+        "question": "pde: u_t = alpha*u_xx",
+        "params": {
+            "equation_type": "pde",
+            "equation": "u_t = alpha*u_xx",
+            "alpha": 1.0,
+            "initial_condition": "sin(pi*x)",
+            "boundary_conditions": {"left": 0, "right": 0},
+            "domain": {"x": [0, 1], "t": [0, 0.05]},
+        },
+    },
+    "波方程": {
+        "question": "pde: u_tt = c**2*u_xx",
+        "params": {
+            "equation_type": "pde",
+            "equation": "u_tt = c**2*u_xx",
+            "c": 1.0,
+            "initial_condition": "sin(pi*x)",
+            "initial_velocity": "0",
+            "boundary_conditions": {"left": 0, "right": 0},
+        },
+    },
+    "Poisson 方程": {
+        "question": "pde: u_xx + u_yy = 0",
+        "params": {"equation_type": "pde", "equation": "u_xx + u_yy = 0", "variables": ["x", "y"]},
+    },
+    "Schrodinger 本征态": {
+        "question": "求解一维定态 Schrodinger 本征值问题",
+        "params": {"problem_type": "eigenvalue", "eigen_solver": "quantum", "potential": "0", "n_states": 4},
+    },
+    "Maxwell 一维波": {
+        "question": "求解 Maxwell 一维电磁波系统",
+        "params": {"problem_type": "pde_system", "system_name": "maxwell", "Nt": 80, "Nx": 80},
+    },
+    "浅水方程": {
+        "question": "求解浅水方程",
+        "params": {"problem_type": "pde_system", "system_name": "shallow_water", "Nt": 80, "Nx": 80},
+    },
+}
 
 
 def _default_params_for_template(entry: dict[str, Any], mode: str, plot_mode: str, precision: str) -> dict[str, Any]:
